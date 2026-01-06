@@ -1,0 +1,5 @@
+pathway[xpack-llm]
+groq
+fastembed
+python-dotenv
+requests
