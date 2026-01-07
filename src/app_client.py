@@ -1,86 +1,127 @@
 import os
+import pandas as pd
 import requests
+import json
 from groq import Groq
 from dotenv import load_dotenv
-from pathlib import Path
 
-# Fix: Explicitly tell Python where the .env file is
-env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+load_dotenv()
 
-# Debug: Print to see if it works (Remove this later)
-api_key = os.getenv("GROQ_API_KEY")
-if not api_key:
-    print("❌ ERROR: Key still not found! Check your .env file.")
-else:
-    print(f"✅ Key loaded: {api_key[:5]}...")
-
-# NOW initialize the client
-GROQ_CLIENT = Groq(api_key=api_key)
-
-# Config
+# CONFIG
 PATHWAY_URL = "http://127.0.0.1:8000/v1/retrieve"
+GROQ_CLIENT = Groq(api_key=os.getenv("GROQ_API_KEY"))
+INPUT_CSV = "input.csv"
+OUTPUT_CSV = "results.csv"
 
-
-def check_consistency(backstory_claim):
-    print(f"\n🔎 Analyzing Claim: '{backstory_claim}'...")
-
-    # 1. RETRIEVE EVIDENCE FROM PATHWAY
-    # We ask for the top 5 most relevant chunks from the book
-    try:
-        response = requests.post(
-            PATHWAY_URL,
-            json={"query": backstory_claim, "k": 5}
-        )
-        results = response.json()
-        
-        # Combine the retrieved text into a single context block
-        evidence_text = "\n---\n".join([r['text'] for r in results])
-    except Exception as e:
-        print(f"Error connecting to Pathway: {e}")
-        return
-
-    # 2. REASONING WITH GROQ (Llama-3-70b is great for this)
-    # We construct a prompt that forces the model to cite evidence.
-    system_prompt = """
-    You are a rigorous Consistency Checker for a novel. 
-    Your job is to validate a 'Backstory Claim' against 'Book Excerpts'.
-    
-    Rules:
-    1. If the claim contradicts the text, output Label: 0.
-    2. If the claim fits (even loosely), output Label: 1.
-    3. You MUST quote the text to support your decision.
+def get_evidence(book_name, query):
     """
-
-    user_prompt = f"""
-    BACKSTORY CLAIM: "{backstory_claim}"
-    
-    EVIDENCE FROM NOVEL:
-    {evidence_text}
-    
-    Task:
-    1. Analyze the evidence.
-    2. Output a JSON with: "prediction" (0 or 1) and "rationale" (string).
+    AGENT 1 TOOL: SCOPED RETRIEVAL
+    Only searches within the specific book to avoid pollution.
     """
-
-    chat_completion = GROQ_CLIENT.chat.completions.create(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt}
-        ],
-        model="llama-3.3-70b-versatile", # Using the large model for better reasoning
-        response_format={"type": "json_object"} # Force valid JSON
+    response = requests.post(
+        PATHWAY_URL,
+        json={
+            "query": query,
+            "k": 5,
+            # THIS IS THE KEY: Filter by the 'book_name' column we created in server.py
+            "filters": {"book_name": book_name} 
+        }
     )
+    if response.status_code == 200:
+        results = response.json()
+        return "\n---\n".join([r['text'] for r in results])
+    return ""
 
-    print("🤖 Groq Verdict:")
-    print(chat_completion.choices[0].message.content)
+def run_pipeline():
+    # 1. Load Data
+    df = pd.read_csv(INPUT_CSV)
+    results = []
+
+    print(f"🚀 Starting Multi-Agent Pipeline on {len(df)} rows...")
+
+    for index, row in df.iterrows():
+        book = row['book_name']
+        char = row['char']
+        claim = row['content']
+
+        if pd.notna(row.get('caption')) and str(row['caption']).strip() != "":
+            caption_context = f"({row['caption']})"
+        else:
+            caption_context = ""        
+        
+        # Refined Search Query
+        search_query = f"{char} {caption_context}: {claim}"
+        
+        print(f"\nProcessing ID {row['id']}...")
+        print(f"🔎 Querying: {search_query}")
+
+        # --- AGENT 1: FACT CHECKER ---
+        # "How this is helpful": It combines Character + Content for a precise query
+        # and filters strictly by the book name.
+        
+        evidence_text = get_evidence(book, search_query)
+        
+        if not evidence_text:
+            print("⚠️ No evidence found (check filenames). Defaulting to Inconsistent.")
+            results.append([row['id'], 0, "No evidence found in text."])
+            continue
+
+        # --- AGENT 2 & 3: PSYCHOLOGIST & JUDGE (Combined for efficiency) ---
+        system_prompt = """
+        You are an AI Judge for a literary consistency contest.
+        You have two sub-personas:
+        1. Fact Checker: Checks dates, names, and hard events.
+        2. Psychologist: Checks character voice, personality, and motivation.
+        
+        Input:
+        - Backstory Claim (A new history proposed for a character)
+        - Evidence (Actual excerpts from the book)
+        - Sometimes You get the caption or sometimes it is None, which helps you understand the context better.
+        
+        Task:
+        Determine if the Backstory is CONSISTENT (1) or CONTRADICTORY (0) with the Evidence.
+        
+        Rules:
+        - If the text explicitly contradicts the claim (e.g. claim says "orphan", text mentions "father"), label 0.
+        - If the claim fits the character's vibe and has no hard contradictions, label 1.
+        - Output JSON: {"prediction": 0 or 1, "rationale": "Quote from text + explanation"}
+        """
+
+        user_prompt = f"""
+        BOOK: {book}
+        CHARACTER: {char}
+        BACKSTORY CLAIM: "{claim}"
+        CAPTION CONTEXT: "{caption_context}"
+        
+        RETRIEVED EVIDENCE FROM BOOK:
+        {evidence_text}
+        """
+
+        try:
+            completion = GROQ_CLIENT.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                model="llama-3.3-70b-versatile",
+                response_format={"type": "json_object"}
+            )
+            
+            response_json = json.loads(completion.choices[0].message.content)
+            pred = response_json.get("prediction", 0)
+            rationale = response_json.get("rationale", "Rationale generation failed.")
+            
+            print(f"✅ Verdict: {pred} | {rationale[:50]}...")
+            results.append([row['id'], pred, rationale])
+
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            results.append([row['id'], 0, "Error in processing"])
+
+    # 3. Save Results
+    output_df = pd.DataFrame(results, columns=["id", "label", "rationale"])
+    output_df.to_csv(OUTPUT_CSV, index=False)
+    print(f"\n🎉 Done! Results saved to {OUTPUT_CSV}")
 
 if __name__ == "__main__":
-    # Example usage for Hackathon testing
-    # In the real submission, you would loop through the input CSV file here.
-    
-    # Test 1: A claim that might be true
-    check_consistency("Captain Grant set sail from Peru in late 1863, hoping to establish a new colony before his disappearance.")
-    
-    # Test 2: A claim that is definitely false
-    check_consistency("Lady Helena was a timid, fragile woman who detested the sea and refused to look at anything violent or exciting.")
+    run_pipeline()
