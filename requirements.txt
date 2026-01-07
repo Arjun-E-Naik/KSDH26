@@ -3,3 +3,7 @@ groq
 fastembed
 python-dotenv
 requests
+sentence-transformers
+pdf2image
+unstructured
+docling

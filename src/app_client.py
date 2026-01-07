@@ -1,14 +1,26 @@
-
 import os
 import requests
 from groq import Groq
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+# Fix: Explicitly tell Python where the .env file is
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+# Debug: Print to see if it works (Remove this later)
+api_key = os.getenv("GROQ_API_KEY")
+if not api_key:
+    print("❌ ERROR: Key still not found! Check your .env file.")
+else:
+    print(f"✅ Key loaded: {api_key[:5]}...")
+
+# NOW initialize the client
+GROQ_CLIENT = Groq(api_key=api_key)
 
 # Config
 PATHWAY_URL = "http://127.0.0.1:8000/v1/retrieve"
-GROQ_CLIENT = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
 
 def check_consistency(backstory_claim):
     print(f"\n🔎 Analyzing Claim: '{backstory_claim}'...")
@@ -56,7 +68,7 @@ def check_consistency(backstory_claim):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        model="llama3-70b-8192", # Using the large model for better reasoning
+        model="llama-3.3-70b-versatile", # Using the large model for better reasoning
         response_format={"type": "json_object"} # Force valid JSON
     )
 
@@ -68,7 +80,7 @@ if __name__ == "__main__":
     # In the real submission, you would loop through the input CSV file here.
     
     # Test 1: A claim that might be true
-    check_consistency("Edmond Dantes was a sailor who loved Mercedes.")
+    check_consistency("Captain Grant set sail from Peru in late 1863, hoping to establish a new colony before his disappearance.")
     
     # Test 2: A claim that is definitely false
-    check_consistency("Edmond Dantes was born in New York and hated the ocean.")
+    check_consistency("Lady Helena was a timid, fragile woman who detested the sea and refused to look at anything violent or exciting.")
