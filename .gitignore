@@ -1,3 +1,10 @@
 .env
 Cache/
 src/__pycache__/
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+venv/
+__pycache__/
+*.so

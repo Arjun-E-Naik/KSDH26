@@ -1,9 +1,12 @@
-pathway[xpack-llm]
+pathway
+# The CPU-only version of PyTorch (Saves 2GB!)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+sentence-transformers
 groq
 fastembed
 python-dotenv
 requests
-sentence-transformers
+
 pdf2image
 unstructured
-docling
