@@ -19,7 +19,7 @@ MODEL_2 = "llama-3.3-70b-versatile"
 PATHWAY_URL = "http://127.0.0.1:8000/v1/retrieve"
 GROQ_CLIENT = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-INPUT_CSV = "train.csv"
+INPUT_CSV = "test.csv"
 OUTPUT_CSV = "results.csv"
 
 TOP_K = 3
@@ -59,12 +59,15 @@ def agent_constraint_extractor(char, claim, caption=""):
     You are a Narrative Constraint Extractor.
     Task: Convert a character backstory claim into explicit constraints.
     Analyse the caption and try to understand context and situation (if not None).
+    Always includes character name and  in description and give better picture of the scenario.
+    If multiple character names given (e.g., "Alice/Bob"), treat they are same character and one charcter has multiple names.
+    description includes character name(s) and that can helps like character present in scenario.
 
     Focus on:
     1. Physical Status (Alive/Dead, Imprisoned, Disabled).
     2. Location/Time.
     3. Key Relationships.
-
+    description includes all relevant details that can help judge the claim .
     Output JSON:
     { "constraints": [ { "type": "Physical/Temporal", "description": "..." } ] }
     """
@@ -90,18 +93,23 @@ def agent_constraint_extractor(char, claim, caption=""):
 # 4. AGENT 1 — QUERY GENERATOR
 # ============================================================
 
-def agent_generate_queries(constraints):
+def agent_generate_queries(char,constraints ,claim):
     system_prompt = """
     You are a Legal Research Strategist.
-    Generate TWO search queries.
 
-    1. Prosecutor Query: look for contradictions
+    Generate TWO search queries.
+    The queries should contain character names and focus on finding evidence related to the constraints provided.
+    If multiple character names given (e.g., "Alice/Bob"), treat they are same character and one charcter has multiple names.
+    Based on scenario the character name is different (e.g., "Bruce Wayne/Batman"), include all names in the query to improve retrieval.
+
+    Here ,Defender query contains claim's important words with character name(s) to find supportive evidence.
+    1. Prosecutor Query: This would be contradict to defender query,including character name(s) and constraint details to find contradictory evidence.
     2. Defender Query: look for support
 
     Output: Prosecutor ||| Defender
     """
 
-    user_prompt = f"Understand the Constraints:\n{json.dumps(constraints)}"
+    user_prompt = f"Understand the Constraints:\n{json.dumps(constraints)} with character: {char} and claim: '{claim}'\nGenerate the two queries as per above instructions."
 
     try:
         r = GROQ_CLIENT.chat.completions.create(
@@ -130,8 +138,12 @@ def agent_judge(claim, constraints, evidence_pro, evidence_def):
 
     system_prompt = """
     You are a Narrative Consistency Judge.
+    If multiple character names given (e.g., "Alice/Bob"), treat they are same character and one charcter has multiple names.
+    Based on scenario the character name is different (e.g., "Bruce Wayne/Batman"), include all names in the query to improve retrieval.
+    Caefully analyse and give verdict.
     
     DECISION LOGIC:
+    
     1. **Direct Contradiction (Score 0):** - If the text explicitly contradicts a Physical or Temporal constraint (e.g., Claim says "In Paris", Text says "In Prison"), Verdict is INCONSISTENT.
     
     2. **Argument from Silence (Score 0 vs 1):**
@@ -140,7 +152,8 @@ def agent_judge(claim, constraints, evidence_pro, evidence_def):
        
     3. **Consistency (Score 1):**
        - If evidence supports the claim OR allows it to happen off-screen.
-       
+    4. Analyse the evidence_pro and evidence_def separately with claim, if any of them matches or preending to give same context as claim, then will be consistent, if not matches then contradicted.
+    5.Aware aboutLocation/Time like if claim taking about contry, but evidence talking about city in that contry,but incidents should matches then it is consistent(eg, Rome in Italy). 
     Output JSON: { "prediction": 0 or 1, "rationale": "Explain with quoted supporting evidence for the decision within 2 -3 lines" }
     """
 
@@ -191,7 +204,7 @@ def run_pipeline():
 
         constraints = agent_constraint_extractor(char, claim, caption)
 
-        queries = agent_generate_queries(constraints)
+        queries = agent_generate_queries(char, constraints ,claim)
 
         q_pro = queries[0] if len(queries) > 0 else ""
         q_def = queries[1] if len(queries) > 1 else q_pro
@@ -211,13 +224,13 @@ def run_pipeline():
         rationale_text = judge_out.get("rationale", "No rationale provided.")
 
         if pred_int == 1:
-            label_str = "consistent"
+            label_str = "1"
         elif pred_int == 0:
-            label_str = "contradict"
+            label_str = "0"
         else:
-            label_str = "consistent"  # 🔹 FIX: submission-safe label
+            label_str = "1"  # 🔹 FIX: submission-safe label
 
-        print(f"   ⚖️ Verdict: {label_str.upper()}")
+        print(f"   ⚖️ Verdict: {label_str}")
         results.append([row_id, label_str, rationale_text])
 
         time.sleep(SLEEP_TIME)
