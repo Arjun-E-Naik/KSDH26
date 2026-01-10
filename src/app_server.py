@@ -8,7 +8,7 @@ HOST = "0.0.0.0"
 PORT = 8000
 
 # ============================================================
-# 1. ADVANCED SIGNAL EXTRACTION (DETERMINISTIC)
+# 1. ADVANCED SIGNAL EXTRACTION 
 # ============================================================
 
 ACTION_VERBS = [
@@ -73,8 +73,7 @@ def augmented_chapter_splitter(text):
             current_chapter = para.split("\n")[0].strip()
             continue
             
-        # 2. Smart Merging: Don't drop small lines (dialogue is crucial!)
-        # Accumulate until we have a decent chunk size (~300 chars)
+
         buffer_text += "\n" + para
         
         if len(buffer_text) >= 400:
@@ -82,7 +81,7 @@ def augmented_chapter_splitter(text):
             time_tag = extract_temporal_signals(buffer_text)
             semantic_tag = extract_semantic_signals(buffer_text)
             
-            # Construct the "Super Chunk"
+
             # Format: [META] Raw Text
             header_parts = [f"SOURCE: {current_chapter}"]
             if time_tag: header_parts.append(time_tag)
@@ -94,10 +93,10 @@ def augmented_chapter_splitter(text):
             final_chunk = f"{header}\n{buffer_text.strip()}"
             enriched_chunks.append(final_chunk)
             
-            # Reset buffer with slight overlap (keep last 50 chars for continuity)
+
             buffer_text = buffer_text[-50:] 
             
-    # Flush remaining buffer
+
     if len(buffer_text) > 50:
         final_chunk = f"[{current_chapter} | END_FRAGMENT]\n{buffer_text.strip()}"
         enriched_chunks.append(final_chunk)
@@ -149,7 +148,7 @@ def run():
 
     print(f"🚀 Augmented Vector Store running on {HOST}:{PORT}")
     
-    # threaded=False is safer for Codespaces/Docker environments
+  
     vector_store.run_server(
         host=HOST,
         port=PORT,
