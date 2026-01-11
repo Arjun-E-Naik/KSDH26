@@ -79,6 +79,12 @@ python app_server.py
 
 WAIT **7–8 minutes** for chunking & embedding. You see the loading boxes in terminal , after completion of that process , continue to next step (Hope you will unnderstand when to start)
 
+![picture of batches and messages to run](image.png)
+
+- You should run app_client.py after completing bacthes and see below message.
+
+``:INFO:FileSystem(./data/): 0 entries (1 minibatch(es)) have been sent to the engine``
+
 Wait for:
 ```
  Augmented Vector Store running on 0.0.0.0:8000

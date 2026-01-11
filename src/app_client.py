@@ -231,6 +231,7 @@ def run_pipeline():
             label_str = "1"  # 🔹 FIX: submission-safe label
 
         print(f"   ⚖️ Verdict: {label_str}")
+        print(f"   📝 Rationale: {rationale_text[:120]}....")
         results.append([row_id, label_str, rationale_text])
 
         time.sleep(SLEEP_TIME)
