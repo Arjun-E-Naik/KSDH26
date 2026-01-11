@@ -1,9 +1,11 @@
 # 📚 Narrative Consistency Verification System  
 ## Kharagpur Data Science Hackathon 2026 — Track A
 
-This project implements a **Pathway-based Retrieval-Augmented Generation (RAG) system with Advance NLP stratergies** to verify whether a character’s backstory or claim is **consistent or contradictory** with the original book text, as required in **Track A** of the Kharagpur Data Science Hackathon 2026.
+This project implements a **Advisoral Narrative based Retrieval-Augmented Generation (RAG) system with Advance NLP stratergies** to verify whether a character’s backstory or claim is **consistent or contradictory** with the  book text.
 
-The project is designed to be submitted as a **ZIP file** .
+ We choosed **Track A** for this Kharagpur Data Science Hackathon 2026.
+
+The project is submitted as a **ZIP file** .
 
 ---
 
@@ -43,7 +45,7 @@ Book Text (.txt files)
 -  Docker (We are not giving much pririority)
 - Using Pathway's Local Vectorstore
 - Please check requirements.txt (Install CPU based torch)
-
+- IMP NOTE : Use a fresh grok api key for our project 
 ---
 
 ## 📦 Installation (ZIP-based)
@@ -64,7 +66,7 @@ Create `.env` file:
 GROQ_API_KEY=your_groq_api_key_here (IMPORTANT THING)
 ```
 
-DO NOT include API keys in the ZIP.
+
 
 ---
 
@@ -75,11 +77,11 @@ DO NOT include API keys in the ZIP.
 python app_server.py
 ```
 
-WAIT **7–8 minutes** for chunking & embedding. You will see an non loading message in terminal (Hope you will unnderstand when to start)
+WAIT **7–8 minutes** for chunking & embedding. You see the loading boxes in terminal , after completion of that process , continue to next step (Hope you will unnderstand when to start)
 
 Wait for:
 ```
-🚀 Augmented Vector Store running on 0.0.0.0:8000
+ Augmented Vector Store running on 0.0.0.0:8000
 ```
 
 ### Step 2: Run Client
@@ -110,7 +112,7 @@ results.csv
 
 - Always start server before client
 - Wait for indexing to complete
-- Handle Groq rate limits carefully
+- Handle Groq rate limits carefully(Use fesh api)
 
 ---
 
